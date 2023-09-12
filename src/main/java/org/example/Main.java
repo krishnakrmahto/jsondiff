@@ -18,17 +18,18 @@ public class Main {
 
     JsonNode jsonDiff = getJsonDiff(jsonFile1, jsonFile2);
 
+
+    File jsonDiffFile = new File("src/main/resources/json-diff.txt");
+    jsonDiffFile.delete();
+
+    jsonDiffFile.createNewFile();
+
     StreamSupport.stream(jsonDiff.spliterator(), false)
         .forEach(jsonDiffNode -> {
 
           String completePrintString = getDiffKeyValuePair(jsonDiffNode);
 
-          File jsonDiffFile = new File("src/main/resources/json-diff.txt");
-          jsonDiffFile.delete();
-
           try {
-
-            jsonDiffFile.createNewFile();
 
             FileWriter fileWriter = new FileWriter(jsonDiffFile, true);
             BufferedWriter bw = new BufferedWriter(fileWriter);
