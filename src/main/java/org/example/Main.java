@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -24,12 +25,12 @@ import java.util.stream.StreamSupport;
 
 public class Main {
 
+  private static final ObjectMapper objectMapper = new ObjectMapper();
+
   public static void main(String[] args) throws IOException {
 
     File jsonFile1 = new File("src/main/resources/json1.json");
     File jsonFile2 = new File("src/main/resources/json2.json");
-
-    ObjectMapper objectMapper = new ObjectMapper();
 
     JsonNode jsonNode1 = objectMapper.readTree(jsonFile1);
     JsonNode jsonNode2 = objectMapper.readTree(jsonFile2);
@@ -45,7 +46,6 @@ public class Main {
 
     Map<String, Pair<ObjectNode,ObjectNode>> jsonPathWithNameToDiscountPairMap = getJsonPathWithNameToDiscountPairMap(discountListWithKeyPath1,
         discountListWithKeyPath2);
-
 
     writeJsonDiffWithoutDiscountList(jsonNode1, jsonNode2, jsonDiffFile, logFile);
 
@@ -207,6 +207,26 @@ public class Main {
 
   private static String getPrintableDiffText(String keyPath, String json1Value, String json2Value) {
     return "Key path: " + keyPath + "\n" + "Value-1: " + json1Value + "\n" + "Value-2: " + json2Value;
+  }
+
+  private static ObjectNode getDiffJson(String keyPath, String json1Value, String json2Value) {
+
+    ObjectNode keyAsJsonObject = convertKeyPathToJsonObjectNode(keyPath);
+
+    keyAsJsonObject.put("value-1", json1Value);
+    keyAsJsonObject.put("value-2", json2Value);
+
+    return keyAsJsonObject;
+  }
+
+  private static ObjectNode convertKeyPathToJsonObjectNode(String keyPath) {
+
+    String[] jsonNodeSegments = keyPath.split("/");
+
+    ObjectNode objectNode = objectMapper.createObjectNode();
+    Arrays.stream(jsonNodeSegments).forEach(objectNode::putObject);
+
+    return objectNode;
   }
 
   private static JsonNode getJsonDiff(JsonNode jsonNode1, JsonNode jsonNode2) {
