@@ -211,20 +211,21 @@ public class Main {
 
   private static ObjectNode getDiffJson(String keyPath, String json1Value, String json2Value) {
 
-    ObjectNode keyAsJsonObject = convertKeyPathToJsonObjectNode(keyPath);
-
-    keyAsJsonObject.put("value-1", json1Value);
-    keyAsJsonObject.put("value-2", json2Value);
-
-    return keyAsJsonObject;
-  }
-
-  private static ObjectNode convertKeyPathToJsonObjectNode(String keyPath) {
-
     String[] jsonNodeSegments = keyPath.split("/");
 
+    if (jsonNodeSegments.length > 0) {
+      jsonNodeSegments = Arrays.copyOfRange(jsonNodeSegments, 1, jsonNodeSegments.length);
+    }
+
     ObjectNode objectNode = objectMapper.createObjectNode();
-    Arrays.stream(jsonNodeSegments).forEach(objectNode::putObject);
+    ObjectNode innerMostNode = objectNode;
+
+    for(String jsonNodeSegment: jsonNodeSegments) {
+      innerMostNode = innerMostNode.putObject(jsonNodeSegment);
+    }
+
+    innerMostNode.put("value-1", json1Value);
+    innerMostNode.put("value-2", json2Value);
 
     return objectNode;
   }
