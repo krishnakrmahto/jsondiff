@@ -280,11 +280,8 @@ public class Main {
     String[] jsonNodeSegments = keyPath.split("/");
 
     int jsonSegmentsLength = jsonNodeSegments.length;
-    if (jsonSegmentsLength > 0) {
-      jsonNodeSegments = Arrays.copyOfRange(jsonNodeSegments, 1, jsonSegmentsLength);
-    } else {
-      jsonNodeSegments = keyPath.split("/");
-    }
+    jsonNodeSegments = Arrays.copyOfRange(jsonNodeSegments, 1, jsonSegmentsLength);
+    jsonSegmentsLength = jsonSegmentsLength - 1;
 
     ObjectNode objectNode = objectMapper.createObjectNode();
     ObjectNode innerMostNode = objectNode;
@@ -297,9 +294,10 @@ public class Main {
       }
 
       if ((i+1) < jsonSegmentsLength && isInteger(jsonNodeSegments[i + 1])) {
-        innerMostNode.putArray(ithJsonNodeSegment);
+        ArrayNode arrayNode = innerMostNode.putArray(ithJsonNodeSegment);
+        arrayNode.add(objectMapper.createObjectNode());
       } else {
-        innerMostNode.putObject(ithJsonNodeSegment);
+        innerMostNode = innerMostNode.putObject(ithJsonNodeSegment);
       }
     }
 
