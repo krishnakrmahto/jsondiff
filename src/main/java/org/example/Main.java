@@ -64,7 +64,7 @@ public class Main {
     // we could transform jsonNode2 as well to diff response format
     transformJsonNode1ToDiffResponseFormat(jsonPatchDiffArray, jsonNode1, jsonNode2);
 
-    writeStringToFile(jsonDiffFile, jsonNode1.toString());
+    writeStringToFile(jsonDiffFile, jsonNode1.toPrettyString());
   }
 
   private static void transformJsonNode1ToDiffResponseFormat(ArrayNode jsonDiffPatchArray, JsonNode jsonNode1, JsonNode jsonNode2) {
