@@ -24,7 +24,7 @@
     <dependency>
       <groupId>com.flipkart.zjsonpatch</groupId>
       <artifactId>zjsonpatch</artifactId>
-      <version>0.4.14</version>
+      <version>0.4.15-SNAPSHOT</version>
     </dependency>
 
     <dependency>
@@ -32,6 +32,13 @@
       <artifactId>json</artifactId>
       <version>20230618</version>
     </dependency>
+
+    <dependency>
+      <groupId>com.github.java-json-tools</groupId>
+      <artifactId>json-patch</artifactId>
+      <version>1.13</version>
+    </dependency>
+
 
   </dependencies>
 

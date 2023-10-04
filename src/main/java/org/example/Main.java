@@ -6,22 +6,21 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flipkart.zjsonpatch.DiffFlags;
 import com.flipkart.zjsonpatch.JsonDiff;
+import com.flipkart.zjsonpatch.JsonPointer;
+import com.flipkart.zjsonpatch.JsonPointer.RefToken;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.StreamSupport;
 
 public class Main {
 
@@ -36,7 +35,6 @@ public class Main {
     ObjectNode jsonNode2 = (ObjectNode) objectMapper.readTree(jsonFile2);
 
     File jsonDiffFile = createJsonDiffFile();
-    File logFile = createLogFile();
 
     Map<String, List<ObjectNode>> discountListWithKeyPath1 = removeAndGetDiscountListFromAssetList(
         (ArrayNode) jsonNode1.get("assetList"));
@@ -60,20 +58,78 @@ public class Main {
     jsonNode1.set("discountList", discountList1);
     jsonNode2.set("discountList", discountList2);
 
-    JsonNode jsonPatchDiffArray = JsonDiff.asJson(jsonNode1, jsonNode2, EnumSet.of(DiffFlags.ADD_ORIGINAL_VALUE_ON_REPLACE, DiffFlags.OMIT_COPY_OPERATION,
+    ArrayNode jsonPatchDiffArray = (ArrayNode) JsonDiff.asJson(jsonNode1, jsonNode2, EnumSet.of(DiffFlags.ADD_ORIGINAL_VALUE_ON_REPLACE, DiffFlags.OMIT_COPY_OPERATION,
         DiffFlags.OMIT_MOVE_OPERATION));
 
-    getResponseJsonObjectForDiff(jsonNode1, jsonNode2, jsonPatchDiffArray);
-//    writeJsonDiffWithoutDiscountList(jsonNode1, jsonNode2, jsonDiffFile, logFile);
+    // we could transform jsonNode2 as well to diff response format
+    transformJsonNode1ToDiffResponseFormat(jsonPatchDiffArray, jsonNode1, jsonNode2);
 
-//    writeJsonDiffForDiscountList(jsonPathWithNameToDiscountPairMap, jsonDiffFile);
-
+    writeStringToFile(jsonDiffFile, jsonNode1.toString());
   }
 
-  private static ObjectNode getResponseJsonObjectForDiff(ObjectNode json1, ObjectNode json2, JsonNode jsonPatchDiffArray) {
+  private static void transformJsonNode1ToDiffResponseFormat(ArrayNode jsonDiffPatchArray, JsonNode jsonNode1, JsonNode jsonNode2) {
+    for(int diffPatchIdx = 0; diffPatchIdx < jsonDiffPatchArray.size(); ++diffPatchIdx) {
 
-    return getJsonDiffWithoutListNodesAsJson(json1, json2, jsonPatchDiffArray);
+      JsonNode current1 = jsonNode1;
 
+      JsonNode jsonDiffPatch = jsonDiffPatchArray.get(diffPatchIdx);
+      String path = jsonDiffPatch.get("path").textValue();
+      JsonPointer jsonPointerFromPath = JsonPointer.parse(path);
+      List<RefToken> pathTokens = jsonPointerFromPath.decompose();
+
+      for (int tokenIdx = 0; tokenIdx < pathTokens.size()-1; ++tokenIdx) {
+        final RefToken token = pathTokens.get(tokenIdx);
+
+        if (current1.isArray()) {
+          current1 = current1.get(token.getIndex());
+        }
+        else if (current1.isObject()) {
+          current1 = current1.get(token.getField());
+        }
+      }
+
+      String operation = jsonDiffPatch.get("op").textValue();
+
+      String diffFieldActualName = pathTokens.get(pathTokens.size() - 1).getField();
+
+      String diffFieldNameWithSuffix = diffFieldActualName + "_ch";
+
+      if (operation.equals("add")) {
+
+        JsonNode json1Value = jsonDiffPatch.get("value");
+
+        ObjectNode objectNode = objectMapper.createObjectNode();
+        objectNode.set("value-1", json1Value);
+        objectNode.set("value-2", objectMapper.createObjectNode());
+
+        ((ObjectNode) current1).set(diffFieldNameWithSuffix, objectNode);
+
+      } else if (operation.equals("remove")) {
+
+        JsonNode json2Value = jsonDiffPatch.get("value");
+
+        ObjectNode objectNode = objectMapper.createObjectNode();
+        objectNode.set("value-1", objectMapper.createObjectNode());
+        objectNode.set("value-2", json2Value);
+
+        ((ObjectNode) current1).set(diffFieldNameWithSuffix, objectNode);
+
+      } else if (operation.equals("replace")) {
+
+        JsonNode json1Value = jsonDiffPatch.get("value");
+        JsonNode json2Value = jsonDiffPatch.get("fromValue");
+
+        ObjectNode objectNode = objectMapper.createObjectNode();
+        objectNode.set("value-1", json1Value);
+        objectNode.set("value-2", json2Value);
+
+        ((ObjectNode) current1).set(diffFieldNameWithSuffix, objectNode);
+      } else {
+        throw new RuntimeException("Operations other than add, remove and replace are not supported");
+      }
+
+      ((ObjectNode) current1).remove(diffFieldActualName);
+    }
   }
 
   private static Map<String, Pair<ObjectNode, ObjectNode>> getJsonPathWithNameToDiscountPairMap(
@@ -124,202 +180,20 @@ public class Main {
         .collect(Collectors.toMap(keyMapper, valueMapper));
   }
 
-  private static void writeStringToFile(File logFile, String jsonDiffNode) throws IOException {
-    FileWriter logWriter = new FileWriter(logFile, true);
-    BufferedWriter bufferedLogWriter = new BufferedWriter(logWriter);
+  private static void writeStringToFile(File file, String jsonDiffNode) throws IOException {
+    FileWriter fileWriter = new FileWriter(file, true);
+    BufferedWriter bufferedLogWriter = new BufferedWriter(fileWriter);
 
     bufferedLogWriter.write(jsonDiffNode);
     bufferedLogWriter.close();
   }
 
-  private static File createLogFile() throws IOException {
-    File logFile = new File("src/main/resources/json-diff-logs.txt");
-    logFile.delete();
-
-    logFile.createNewFile();
-    return logFile;
-  }
-
   private static File createJsonDiffFile() throws IOException {
-    File jsonDiffFile = new File("src/main/resources/json-diff.txt");
+    File jsonDiffFile = new File("src/main/resources/json-diff.json");
     jsonDiffFile.delete();
 
     jsonDiffFile.createNewFile();
     return jsonDiffFile;
   }
 
-  private static String getPrintableDiffKeyValuePair(JsonNode jsonDiffNode, String pathPrefix) {
-
-    String operation = jsonDiffNode.get("op").textValue();
-
-    String printableDiffText;
-    String keyPath = jsonDiffNode.get("path").textValue();
-    keyPath = (Optional.ofNullable(pathPrefix).isPresent()? pathPrefix: "") + keyPath;
-
-    if (operation.equals("add")) {
-
-      String json1Value = jsonDiffNode.get("value").toString();
-
-      printableDiffText = getPrintableDiffText(keyPath, json1Value, null);
-
-    } else if (operation.equals("remove")) {
-
-      String json2Value = jsonDiffNode.get("value").toString();
-
-      printableDiffText = getPrintableDiffText(keyPath, null, json2Value);
-
-    } else if (operation.equals("replace")) {
-
-      String json1Value = jsonDiffNode.get("value").toString();
-      String json2Value = jsonDiffNode.get("fromValue").toString();
-
-      printableDiffText = getPrintableDiffText(keyPath, json1Value, json2Value);
-    } else {
-      printableDiffText = "Key path: " + keyPath;
-    }
-
-    return printableDiffText + "\n\n";
-  }
-
-  private static ObjectNode getDiffKeyValuePairAsJson(JsonNode jsonDiffPatch) {
-
-    String operation = jsonDiffPatch.get("op").textValue();
-
-    String keyPath = jsonDiffPatch.get("path").textValue();
-
-    if (operation.equals("add")) {
-
-      String json1Value = jsonDiffPatch.get("value").toString();
-
-      return getDiffAsJsonFromPathAndOriginalValues(keyPath, json1Value, null);
-
-    } else if (operation.equals("remove")) {
-
-      String json2Value = jsonDiffPatch.get("value").toString();
-
-      return getDiffAsJsonFromPathAndOriginalValues(keyPath, null, json2Value);
-
-    } else if (operation.equals("replace")) {
-
-      String json1Value = jsonDiffPatch.get("value").toString();
-      String json2Value = jsonDiffPatch.get("fromValue").toString();
-
-      return getDiffAsJsonFromPathAndOriginalValues(keyPath, json1Value, json2Value);
-    } else {
-      throw new RuntimeException("Operations other than add, remove and replace are not supported");
-    }
-  }
-
-  private static void writeJsonDiffWithoutDiscountList(JsonNode jsonNode1, JsonNode jsonNode2, File jsonDiffFile,
-      File logFile) {
-    JsonNode jsonDiffArray = getJsonDiff(jsonNode1, jsonNode2);
-
-    StreamSupport.stream(jsonDiffArray.spliterator(), false)
-        .forEach(jsonDiffNode -> {
-
-          String jsonDiffPrintString = getPrintableDiffKeyValuePair(jsonDiffNode, null);
-
-          try {
-
-            writeStringToFile(logFile, jsonDiffNode + "\n\n");
-            writeStringToFile(jsonDiffFile, jsonDiffPrintString);
-
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        });
-  }
-
-  private static ObjectNode getJsonDiffWithoutListNodesAsJson(JsonNode jsonNode1, JsonNode jsonNode2, JsonNode jsonDiffPatchArray) {
-
-    //          try {
-    //
-    //
-    //          } catch (IOException e) {
-    //            throw new RuntimeException(e);
-    //          }
-    StreamSupport.stream(jsonDiffPatchArray.spliterator(), false)
-        .map(Main::getDiffKeyValuePairAsJson).collect(Collectors.toList());
-
-    return null;
-  }
-
-  private static void writeJsonDiffForDiscountList(Map<String, Pair<ObjectNode, ObjectNode>> jsonPathWithNameToDiscountPairMap,
-      File jsonDiffFile) {
-
-    jsonPathWithNameToDiscountPairMap.forEach((jsonPathWithName, discountPair) -> {
-
-      ObjectNode first = discountPair.getFirst();
-      ObjectNode second = discountPair.getSecond();
-
-      JsonNode jsonDiffArray = getJsonDiff(first, second);
-
-      StreamSupport.stream(jsonDiffArray.spliterator(), false)
-          .forEach(jsonDiffNode -> {
-
-            String jsonDiffPrintString = getPrintableDiffKeyValuePair(jsonDiffNode, jsonPathWithName);
-
-            try {
-
-              writeStringToFile(jsonDiffFile, jsonDiffPrintString);
-
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          });
-
-    });
-  }
-
-  private static String getPrintableDiffText(String keyPath, String json1Value, String json2Value) {
-    return "Key path: " + keyPath + "\n" + "Value-1: " + json1Value + "\n" + "Value-2: " + json2Value;
-  }
-
-  private static ObjectNode getDiffAsJsonFromPathAndOriginalValues(String keyPath, String json1Value, String json2Value) {
-
-    String[] jsonNodeSegments = keyPath.split("/");
-
-    int jsonSegmentsLength = jsonNodeSegments.length;
-    jsonNodeSegments = Arrays.copyOfRange(jsonNodeSegments, 1, jsonSegmentsLength);
-    jsonSegmentsLength = jsonSegmentsLength - 1;
-
-    ObjectNode objectNode = objectMapper.createObjectNode();
-    ObjectNode innerMostNode = objectNode;
-
-    for (int i = 0; i < jsonSegmentsLength; i++) {
-      String ithJsonNodeSegment = jsonNodeSegments[i];
-
-      if (isInteger(ithJsonNodeSegment)) {
-        continue;
-      }
-
-      if ((i+1) < jsonSegmentsLength && isInteger(jsonNodeSegments[i + 1])) {
-        ArrayNode arrayNode = innerMostNode.putArray(ithJsonNodeSegment);
-        arrayNode.add(objectMapper.createObjectNode());
-      } else {
-        innerMostNode = innerMostNode.putObject(ithJsonNodeSegment);
-      }
-    }
-
-    innerMostNode.put("value-1", json1Value);
-    innerMostNode.put("value-2", json2Value);
-
-    return objectNode;
-  }
-
-  private static JsonNode getJsonDiff(JsonNode jsonNode1, JsonNode jsonNode2) {
-
-    return JsonDiff.asJson(jsonNode1, jsonNode2,
-        EnumSet.of(DiffFlags.ADD_ORIGINAL_VALUE_ON_REPLACE, DiffFlags.OMIT_COPY_OPERATION,
-            DiffFlags.OMIT_MOVE_OPERATION));
-  }
-
-  private static boolean isInteger(String str) {
-    try {
-      Integer.parseInt(str);
-      return true;
-    } catch (NumberFormatException e) {
-      return false;
-    }
-  }
 }
