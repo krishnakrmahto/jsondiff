@@ -31,10 +31,12 @@ public class Main {
     File jsonFile1 = new File("src/main/resources/json1.json");
     File jsonFile2 = new File("src/main/resources/json2.json");
 
+    File jsonDiffFile = createJsonDiffFile();
+
+    long startEpochMs = System.currentTimeMillis();
+
     ObjectNode jsonNode1 = (ObjectNode) objectMapper.readTree(jsonFile1);
     ObjectNode jsonNode2 = (ObjectNode) objectMapper.readTree(jsonFile2);
-
-    File jsonDiffFile = createJsonDiffFile();
 
     Map<String, List<ObjectNode>> discountListWithKeyPath1 = removeAndGetDiscountListFromAssetList(
         (ArrayNode) jsonNode1.get("assetList"));
@@ -64,6 +66,9 @@ public class Main {
     // we could transform jsonNode2 as well to diff response format
     transformJsonNode1ToDiffResponseFormat(jsonPatchDiffArray, jsonNode1, jsonNode2);
 
+    long endEpochMs = System.currentTimeMillis();
+
+    System.out.println("Total time taken to compute the JSON diff response in seconds: " + (endEpochMs-startEpochMs)/1000.0);
     writeStringToFile(jsonDiffFile, jsonNode1.toPrettyString());
   }
 
