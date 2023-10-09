@@ -101,16 +101,6 @@ public class Main {
 
       if (operation.equals("add")) {
 
-        JsonNode json1Value = jsonDiffPatch.get("value");
-
-        ObjectNode objectNode = objectMapper.createObjectNode();
-        objectNode.set("value-1", json1Value);
-        objectNode.set("value-2", objectMapper.createObjectNode());
-
-        ((ObjectNode) current1).set(diffFieldNameWithSuffix, objectNode);
-
-      } else if (operation.equals("remove")) {
-
         JsonNode json2Value = jsonDiffPatch.get("value");
 
         ObjectNode objectNode = objectMapper.createObjectNode();
@@ -119,10 +109,20 @@ public class Main {
 
         ((ObjectNode) current1).set(diffFieldNameWithSuffix, objectNode);
 
-      } else if (operation.equals("replace")) {
+      } else if (operation.equals("remove")) {
 
         JsonNode json1Value = jsonDiffPatch.get("value");
-        JsonNode json2Value = jsonDiffPatch.get("fromValue");
+
+        ObjectNode objectNode = objectMapper.createObjectNode();
+        objectNode.set("value-1", json1Value);
+        objectNode.set("value-2", objectMapper.createObjectNode());
+
+        ((ObjectNode) current1).set(diffFieldNameWithSuffix, objectNode);
+
+      } else if (operation.equals("replace")) {
+
+        JsonNode json1Value = jsonDiffPatch.get("fromValue");
+        JsonNode json2Value = jsonDiffPatch.get("value");
 
         ObjectNode objectNode = objectMapper.createObjectNode();
         objectNode.set("value-1", json1Value);
